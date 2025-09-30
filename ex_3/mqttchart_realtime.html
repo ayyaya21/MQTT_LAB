@@ -2,159 +2,102 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MQTT Real-time Chart</title>
+    <title>MQTT Real-time Sensor Chart</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
     <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            flex-direction: column;
-            background-color: #f0f2f5;
-            margin: 0;
-            height: 100vh;
-        }
-        .chart-container {
-            width: 80%;
-            max-width: 900px;
-            padding: 20px;
-            background-color: #ffffff;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-        }
-        h1 {
-            color: #333;
-            text-align: center;
-        }
-        #connectionStatus {
-            text-align: center;
-            margin-top: 10px;
-            font-weight: bold;
-        }
+        body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background-color: #f0f2f5; }
+        .chart-container { width: 80%; max-width: 800px; padding: 20px; background: white; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        h1, #connectionStatus { text-align: center; }
     </style>
 </head>
 <body>
-
     <div class="chart-container">
         <h1>Real-time Sensor Data</h1>
         <canvas id="realtimeChart"></canvas>
         <div id="connectionStatus">Status: Disconnected</div>
     </div>
 
-    <script>
-        // --- Configuration ---
-        // 🚨 Change these values to match your setup
-        var MQTTbroker = 'broker.hivemq.com'; // Use a public broker or your own
-        var MQTTport = 8000;                  // WebSocket port for the broker
-        var MQTTsubTopic = 'rpi/sensor';      [cite_start]// Topic to subscribe to [cite: 199, 200]
-        const MAX_DATA_POINTS = 20;           // Max points to show on the chart
+<script>
+    // --- ตั้งค่าการเชื่อมต่อ MQTT ---
+    var MQTTbroker = 'broker.hivemq.com'; // Broker ที่ใช้
+    var MQTTport = 8000;                  // Port สำหรับ Websocket
+    var MQTTsubTopic = 'rpi/sensor';      // Topic ที่จะรอรับข้อมูล (ต้องตรงกับฝั่ง Pi)
+    const MAX_DATA_POINTS = 30;           // จำนวนจุดสูงสุดที่จะแสดงบนกราฟ
+    // ------------------------------------
 
-        // --- Chart Initialization ---
-        const ctx = document.getElementById('realtimeChart').getContext('2d');
-        const realtimeChart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: [], // Timestamps or counters
-                datasets: [{
-                    label: 'Sensor Value',
-                    data: [], // The actual data points
-                    borderColor: 'rgb(75, 192, 192)',
-                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                    borderWidth: 2,
-                    tension: 0.4,
-                    fill: true
-                }]
-            },
-            options: {
-                scales: {
-                    x: {
-                        title: { display: true, text: 'Time' }
-                    },
-                    y: {
-                        title: { display: true, text: 'Value' },
-                        beginAtZero: true
-                    }
-                },
-                animation: {
-                    duration: 250 // Smooth transition for new data
-                }
-            }
-        });
+    const statusDiv = document.getElementById('connectionStatus');
 
-        // --- MQTT Client Logic ---
-        // Create a client instance with a unique client ID
-        var client = new Paho.MQTT.Client(MQTTbroker, MQTTport, "web-chart-" + parseInt(Math.random() * 100, 10));
+    // --- ตั้งค่ากราฟ ---
+    const ctx = document.getElementById('realtimeChart').getContext('2d');
+    const realtimeChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [], // แกน X (เวลา)
+            datasets: [{
+                label: 'Sensor Value',
+                data: [], // แกน Y (ข้อมูลที่รับมา)
+                borderColor: 'rgb(54, 162, 235)',
+                backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                borderWidth: 2,
+                tension: 0.4,
+                fill: true
+            }]
+        },
+        options: { scales: { y: { beginAtZero: true } } }
+    });
 
-        // Set callback handlers
-        client.onConnectionLost = onConnectionLost;
-        client.onMessageArrived = onMessageArrived;
+    // --- เชื่อมต่อ MQTT ---
+    var client = new Paho.MQTT.Client(MQTTbroker, MQTTport, "web-chart-" + Date.now());
+    client.onConnectionLost = onConnectionLost;
+    client.onMessageArrived = onMessageArrived;
+    client.connect({ onSuccess: onConnect, onFailure: onFailure });
 
-        // Connect the client
-        client.connect({ 
-            onSuccess: onConnect,
-            onFailure: onConnectionFailure
-        });
+    function onConnect() {
+        console.log("Connected to MQTT broker!");
+        statusDiv.textContent = `Status: Connected and listening on topic '${MQTTsubTopic}'`;
+        statusDiv.style.color = 'green';
+        client.subscribe(MQTTsubTopic);
+    }
 
-        // Called when the client connects
-        function onConnect() {
-            console.log("Connected to MQTT broker via WebSocket!");
-            document.getElementById('connectionStatus').textContent = `Status: Connected to ${MQTTbroker}`;
-            document.getElementById('connectionStatus').style.color = 'green';
-            // Subscribe to the topic
-            client.subscribe(MQTTsubTopic);
+    function onFailure(response) {
+        console.log("Connection Failed: " + response.errorMessage);
+        statusDiv.textContent = "Connection Failed: " + response.errorMessage;
+        statusDiv.style.color = 'red';
+    }
+
+    function onConnectionLost(responseObject) {
+        if (responseObject.errorCode !== 0) {
+            console.log("Connection Lost: " + responseObject.errorMessage);
+            statusDiv.textContent = "Connection Lost!";
+            statusDiv.style.color = 'red';
         }
+    }
+
+    function onMessageArrived(message) {
+        const value = parseFloat(message.payloadString);
+        console.log(`Received value: ${value}`);
+        if (!isNaN(value)) {
+            updateChart(value);
+        }
+    }
+
+    // --- ฟังก์ชันอัปเดตกราฟ ---
+    function updateChart(value) {
+        const timestamp = new Date().toLocaleTimeString();
         
-        // Called if the connection fails
-        function onConnectionFailure(responseObject) {
-            console.log("Connection Failed: " + responseObject.errorMessage);
-            document.getElementById('connectionStatus').textContent = `Status: Failed to connect - ${responseObject.errorMessage}`;
-            document.getElementById('connectionStatus').style.color = 'red';
+        // เพิ่มข้อมูลใหม่เข้าไป
+        realtimeChart.data.labels.push(timestamp);
+        realtimeChart.data.datasets[0].data.push(value);
+
+        // ถ้าข้อมูลเยอะเกินไป ให้ลบข้อมูลเก่าสุดออก
+        if (realtimeChart.data.labels.length > MAX_DATA_POINTS) {
+            realtimeChart.data.labels.shift();
+            realtimeChart.data.datasets[0].data.shift();
         }
 
-        // Called when the client loses its connection
-        function onConnectionLost(responseObject) {
-            if (responseObject.errorCode !== 0) {
-                console.log("Connection Lost: " + responseObject.errorMessage);
-                document.getElementById('connectionStatus').textContent = "Status: Connection Lost!";
-                document.getElementById('connectionStatus').style.color = 'red';
-            }
-        }
-
-        // Called when a message arrives
-        function onMessageArrived(message) {
-            const topic = message.destinationName;
-            const payload = message.payloadString;
-            console.log(`Message arrived on topic ${topic}: ${payload}`);
-
-            // Ensure the message is a valid number
-            const value = parseFloat(payload);
-            if (!isNaN(value)) {
-                updateChart(value);
-            }
-        }
-
-        // --- Chart Update Function ---
-        function updateChart(value) {
-            const now = new Date();
-            const timestamp = now.toLocaleTimeString(); // e.g., "10:30:45 PM"
-
-            // Add new data
-            realtimeChart.data.labels.push(timestamp);
-            realtimeChart.data.datasets[0].data.push(value);
-
-            // Keep the chart from getting too crowded
-            if (realtimeChart.data.labels.length > MAX_DATA_POINTS) {
-                realtimeChart.data.labels.shift(); // Remove the oldest label
-                realtimeChart.data.datasets[0].data.shift(); // Remove the oldest data point
-            }
-
-            // Redraw the chart with the new data
-            realtimeChart.update();
-        }
-    </script>
-
+        realtimeChart.update(); // สั่งให้กราฟวาดใหม่
+    }
+</script>
 </body>
 </html>
