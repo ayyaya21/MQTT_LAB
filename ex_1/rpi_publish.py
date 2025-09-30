@@ -3,8 +3,8 @@ import RPi.GPIO as GPIO
 import time
 
 # -- MQTT Configuration --
-MQTT_BROKER = "broker.mqttdashboard.com"
-MQTT_PORT = 1883
+MQTT_BROKER = "broker.hivemq.com"
+MQTT_PORT = 8884
 MQTT_TOPIC = "rpi/button"
 
 # -- GPIO Configuration --
