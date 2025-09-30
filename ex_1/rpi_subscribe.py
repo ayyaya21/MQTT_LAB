@@ -1,20 +1,20 @@
 import paho.mqtt.client as mqtt
 import RPi.GPIO as GPIO
+import time # <-- เพิ่มการ import time เข้ามา
 
 # -- MQTT Configuration --
-MQTT_BROKER = "broker.mqttdashboard.com"
+MQTT_BROKER = "broker.hivemq.com"
 MQTT_PORT = 1883
-MQTT_TOPIC = "rpi/led"
+# แก้ Topic ให้ตรงกับตัวส่งสัญญาณ (ปุ่มกด)
+MQTT_TOPIC = "rpi/button" 
 
 # -- GPIO Configuration --
-LED_PIN = 18 # Use any available GPIO pin
+LED_PIN = 18
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(LED_PIN, GPIO.OUT)
+GPIO.output(LED_PIN, GPIO.LOW) # <-- สั่งให้ไฟดับไว้ก่อนตอนเริ่มโปรแกรม
 
-# -- Setup Functions --
-def setup_gpio():
-    GPIO.setmode(GPIO.BCM)
-    GPIO.setup(LED_PIN, GPIO.OUT)
-    GPIO.output(LED_PIN, GPIO.LOW) # Initially turn off LED
-
+# -- Callback Functions --
 def on_connect(client, userdata, flags, rc):
     if rc == 0:
         print("Connected to MQTT Broker!")
@@ -23,21 +23,23 @@ def on_connect(client, userdata, flags, rc):
     else:
         print(f"Failed to connect, return code {rc}\n")
 
+# ฟังก์ชัน on_message คือหัวใจสำคัญที่เราจะแก้ไข
 def on_message(client, userdata, msg):
     payload = msg.payload.decode()
-    print(f"Received message on topic {msg.topic}: {payload}")
+    print(f"Received message: '{payload}' on topic '{msg.topic}'")
+
+    # ถ้าได้รับข้อความว่า "ON"
     if payload == "ON":
-        GPIO.output(LED_PIN, GPIO.HIGH)
-        print("LED turned ON")
-    elif payload == "OFF":
-        GPIO.output(LED_PIN, GPIO.LOW)
-        print("LED turned OFF")
+        print("LED ON")
+        GPIO.output(LED_PIN, GPIO.HIGH) # 1. สั่งให้ LED ติด
+        
+        time.sleep(1) # 2. หน่วงเวลา 1 วินาที (ปรับค่าได้ตามชอบ)
+        
+        print("LED OFF")
+        GPIO.output(LED_PIN, GPIO.LOW) # 3. สั่งให้ LED ดับ
 
 # -- Main Program --
 if __name__ == "__main__":
-    setup_gpio()
-    
-    # Initialize MQTT Client
     client = mqtt.Client()
     client.on_connect = on_connect
     client.on_message = on_message
