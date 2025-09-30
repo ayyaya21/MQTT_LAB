@@ -1,0 +1,54 @@
+<script>
+    // -- MQTT Configuration --
+    var MQTTbroker = 'broker.hivemq.com'; // Use a public broker like HiveMQ
+    var MQTTport = 8000; // WebSocket port for the broker
+    var MQTTsubTopic = 'rpi/control'; // The topic the Raspberry Pi will subscribe to
+
+    // Create a client instance
+    var client = new Paho.MQTT.Client(MQTTbroker, MQTTport, "web-client-" + parseInt(Math.random() * 100, 10));
+
+    // -- Connection and Message Handling --
+    client.onConnectionLost = onConnectionLost;
+    client.onMessageArrived = onMessageArrived;
+    client.connect({ onSuccess: onConnect });
+
+    function onConnect() {
+        console.log("Connected to MQTT broker via WebSocket");
+    }
+
+    function onConnectionLost(responseObject) {
+        if (responseObject.errorCode !== 0) {
+            console.log("onConnectionLost:" + responseObject.errorMessage);
+        }
+    }
+
+    function onMessageArrived(message) {
+        console.log("onMessageArrived:" + message.payloadString);
+    }
+
+    // -- Control Functions --
+    function turnOn() {
+        var message = new Paho.MQTT.Message("ON");
+        message.destinationName = MQTTsubTopic;
+        client.send(message);
+        console.log("Sent 'ON'");
+    }
+
+    function turnOff() {
+        var message = new Paho.MQTT.Message("OFF");
+        message.destinationName = MQTTsubTopic;
+        client.send(message);
+        console.log("Sent 'OFF'");
+    }
+
+    function setBrightness(value) {
+        var message = new Paho.MQTT.Message("BRIGHTNESS:" + value);
+        message.destinationName = MQTTsubTopic;
+        client.send(message);
+        console.log("Sent brightness: " + value);
+    }
+</script>
+
+<button onclick="turnOn()">ON</button>
+<button onclick="turnOff()">OFF</button>
+<input type="range" min="0" max="100" value="50" onchange="setBrightness(this.value)">
